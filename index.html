@@ -4,27 +4,37 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>💰 Argent de Poche - Famille</title>
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide-react@latest/dist/umd/lucide-react.js"></script>
     <style>
-        body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+        body { 
+            margin: 0; 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+            background: linear-gradient(to bottom, #dbeafe, #e9d5ff);
+            min-height: 100vh;
+        }
     </style>
 </head>
 <body>
-    <div id="root"></div>
+    <div id="root">
+        <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh;">
+            <div style="text-align: center; padding: 2rem; background: white; border-radius: 1rem;">
+                <div style="font-size: 3rem; margin-bottom: 1rem;">💰</div>
+                <div style="font-size: 1.5rem;">Chargement de l'application...</div>
+            </div>
+        </div>
+    </div>
     
     <script type="text/babel">
         const { useState, useEffect } = React;
-        const { User, Plus, Minus, History, RotateCcw, Wallet, Lock } = lucide;
 
         const PocketMoneyApp = () => {
           const [currentUser, setCurrentUser] = useState(null);
           const [children, setChildren] = useState([
-            { id: 1, name: '👦👦 Thomas', balance: 0, avatar: '👦👦' },
-            { id: 2, name: '👦 Clément', balance: 0, avatar: '👦' }
+            { id: 1, name: 'Thomas', balance: 0, avatar: '🧑‍🦱', age: '12 ans (aîné)', color: 'from-blue-500 to-cyan-500' },
+            { id: 2, name: 'Clément', balance: 0, avatar: '👦', age: '10 ans (cadet)', color: 'from-green-500 to-emerald-500' }
           ]);
           const [transactions, setTransactions] = useState([]);
           const [showAddMoney, setShowAddMoney] = useState(false);
@@ -42,39 +52,43 @@
           const users = [
             { id: 'papa', name: '👨 Papa', role: 'parent' },
             { id: 'maman', name: '👩 Maman', role: 'parent' },
-            { id: 'emma', name: '👧 Emma', role: 'child' },
-            { id: 'lucas', name: '👦 Lucas', role: 'child' }
+            { id: 'thomas', name: '🧑‍🦱 Thomas', role: 'child' },
+            { id: 'clement', name: '👦 Clément', role: 'child' }
           ];
 
           // Charger les données depuis localStorage au démarrage
           useEffect(() => {
-            const savedChildren = localStorage.getItem('pocketMoney_children');
-            const savedTransactions = localStorage.getItem('pocketMoney_transactions');
-            
-            if (savedChildren) {
-              try {
+            try {
+              const savedChildren = localStorage.getItem('pocketMoney_children');
+              const savedTransactions = localStorage.getItem('pocketMoney_transactions');
+              
+              if (savedChildren) {
                 setChildren(JSON.parse(savedChildren));
-              } catch (e) {
-                console.error('Erreur lors du chargement des enfants:', e);
               }
-            }
-            
-            if (savedTransactions) {
-              try {
+              
+              if (savedTransactions) {
                 setTransactions(JSON.parse(savedTransactions));
-              } catch (e) {
-                console.error('Erreur lors du chargement des transactions:', e);
               }
+            } catch (e) {
+              console.log('Premier chargement - pas de données sauvegardées');
             }
           }, []);
 
           // Sauvegarder les données dans localStorage à chaque changement
           useEffect(() => {
-            localStorage.setItem('pocketMoney_children', JSON.stringify(children));
+            try {
+              localStorage.setItem('pocketMoney_children', JSON.stringify(children));
+            } catch (e) {
+              console.error('Erreur sauvegarde enfants:', e);
+            }
           }, [children]);
 
           useEffect(() => {
-            localStorage.setItem('pocketMoney_transactions', JSON.stringify(transactions));
+            try {
+              localStorage.setItem('pocketMoney_transactions', JSON.stringify(transactions));
+            } catch (e) {
+              console.error('Erreur sauvegarde transactions:', e);
+            }
           }, [transactions]);
 
           const handleUserLogin = (user) => {
@@ -89,7 +103,7 @@
           };
 
           const handlePasswordSubmit = () => {
-            if (password === '$TC$') {
+            if (password === '1234') {
               setCurrentUser(pendingUser);
               setShowPasswordModal(false);
               setPendingUser(null);
@@ -149,10 +163,6 @@
               const resetChildren = children.map(child => ({ ...child, balance: 0 }));
               setChildren(resetChildren);
               setTransactions([]);
-              
-              // Nettoyer localStorage aussi
-              localStorage.setItem('pocketMoney_children', JSON.stringify(resetChildren));
-              localStorage.setItem('pocketMoney_transactions', JSON.stringify([]));
             }
           };
 
@@ -166,8 +176,8 @@
               <div className="min-h-screen bg-gradient-to-b from-blue-100 to-purple-100 p-4 flex items-center justify-center">
                 <div className="bg-white rounded-3xl shadow-lg p-8 w-full max-w-sm">
                   <div className="text-center mb-6">
-                    <Lock className="w-12 h-12 text-blue-500 mx-auto mb-4" />
-                    <h2 className="text-xl font-bold text-gray-800 mb-2">🔒 Accès Parent</h2>
+                    <div className="text-4xl mb-4">🔒</div>
+                    <h2 className="text-xl font-bold text-gray-800 mb-2">Accès Parent</h2>
                     <p className="text-gray-600">Connexion pour {pendingUser.name}</p>
                   </div>
 
@@ -221,8 +231,8 @@
                 <div className="max-w-md mx-auto">
                   <div className="bg-white rounded-3xl shadow-lg p-8 mt-8">
                     <div className="text-center mb-8">
-                      <Wallet className="w-16 h-16 text-blue-500 mx-auto mb-4" />
-                      <h1 className="text-2xl font-bold text-gray-800 mb-2">💰 Argent de Poche</h1>
+                      <div className="text-6xl mb-4">💰</div>
+                      <h1 className="text-2xl font-bold text-gray-800 mb-2">Argent de Poche</h1>
                       <p className="text-gray-600">Qui êtes-vous ?</p>
                     </div>
                     
@@ -234,7 +244,7 @@
                           className="w-full p-4 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-2xl font-medium text-lg shadow-md hover:shadow-lg transform hover:scale-105 transition-all flex items-center justify-center space-x-2"
                         >
                           <span>{user.name}</span>
-                          {user.role === 'parent' && <Lock className="w-4 h-4 ml-2" />}
+                          {user.role === 'parent' && <span className="text-sm">🔒</span>}
                         </button>
                       ))}
                     </div>
@@ -266,19 +276,20 @@
                       >
                         ← Retour
                       </button>
-                      <h2 className="text-xl font-bold">{historyChild.name}</h2>
+                      <h2 className="text-xl font-bold">{historyChild.avatar} {historyChild.name}</h2>
                       <div className="w-16"></div>
                     </div>
 
-                    <div className="mb-6 p-4 bg-gradient-to-r from-green-400 to-blue-500 text-white rounded-2xl text-center">
-                      <p className="text-sm opacity-90">Solde actuel</p>
+                    <div className={`mb-6 p-4 bg-gradient-to-r ${historyChild.color} text-white rounded-2xl text-center`}>
+                      <p className="text-sm opacity-90">Solde disponible</p>
                       <p className="text-2xl font-bold">{historyChild.balance.toFixed(2)} €</p>
+                      <p className="text-xs opacity-75">{historyChild.age}</p>
                     </div>
 
-                    <h3 className="text-lg font-bold mb-4">📚 Historique</h3>
+                    <h3 className="text-lg font-bold mb-4">📚 Historique des transactions</h3>
                     
                     {childTransactions.length === 0 ? (
-                      <p className="text-gray-500 text-center py-8">Aucune transaction</p>
+                      <p className="text-gray-500 text-center py-8">Aucune transaction pour le moment</p>
                     ) : (
                       <div className="space-y-3 max-h-96 overflow-y-auto">
                         {childTransactions.map(transaction => (
@@ -289,7 +300,7 @@
                                 <p className="text-sm text-gray-600">
                                   {transaction.date} à {transaction.time}
                                 </p>
-                                <p className="text-xs text-gray-500">Par {transaction.addedBy}</p>
+                                <p className="text-xs text-gray-500">Saisi par {transaction.addedBy}</p>
                               </div>
                               <div className="text-right">
                                 <p className={`font-bold ${transaction.type === 'add' ? 'text-green-600' : 'text-red-600'}`}>
@@ -316,14 +327,14 @@
                     <p className="text-sm text-gray-600">Connecté en tant que</p>
                     <p className="font-bold text-lg flex items-center">
                       {currentUser.name}
-                      {currentUser.role === 'parent' && <Lock className="w-4 h-4 ml-2 text-blue-500" />}
+                      {currentUser.role === 'parent' && <span className="ml-2 text-blue-500">🔒</span>}
                     </p>
                   </div>
                   <button 
                     onClick={() => setCurrentUser(null)}
                     className="bg-gray-100 p-2 rounded-full hover:bg-gray-200"
                   >
-                    <User className="w-5 h-5" />
+                    👤
                   </button>
                 </div>
 
@@ -339,7 +350,10 @@
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="text-xl font-bold flex items-center">
                           <span className="text-3xl mr-3">{child.avatar}</span>
-                          {child.name.replace('👧 ', '').replace('👦 ', '')}
+                          <div>
+                            <div>{child.name}</div>
+                            <div className="text-sm text-gray-500 font-normal">{child.age}</div>
+                          </div>
                         </h3>
                         <button
                           onClick={() => {
@@ -347,12 +361,13 @@
                             setShowHistory(true);
                           }}
                           className="bg-blue-100 p-2 rounded-full hover:bg-blue-200"
+                          title="Voir l'historique"
                         >
-                          <History className="w-5 h-5 text-blue-600" />
+                          📊
                         </button>
                       </div>
                       
-                      <div className="bg-gradient-to-r from-green-400 to-blue-500 text-white rounded-2xl p-4 mb-4">
+                      <div className={`bg-gradient-to-r ${child.color} text-white rounded-2xl p-4 mb-4`}>
                         <p className="text-sm opacity-90">Solde disponible</p>
                         <p className="text-3xl font-bold">{child.balance.toFixed(2)} €</p>
                       </div>
@@ -366,7 +381,7 @@
                             }}
                             className="flex-1 bg-green-500 text-white p-3 rounded-2xl font-medium flex items-center justify-center space-x-2 hover:bg-green-600"
                           >
-                            <Plus className="w-5 h-5" />
+                            <span>➕</span>
                             <span>Ajouter</span>
                           </button>
                           <button
@@ -376,7 +391,7 @@
                             }}
                             className="flex-1 bg-red-500 text-white p-3 rounded-2xl font-medium flex items-center justify-center space-x-2 hover:bg-red-600"
                           >
-                            <Minus className="w-5 h-5" />
+                            <span>➖</span>
                             <span>Dépense</span>
                           </button>
                         </div>
@@ -392,6 +407,9 @@
                             </span>
                           </div>
                         ))}
+                        {getChildTransactions(child.id).length === 0 && (
+                          <p className="text-gray-400 text-sm italic text-center py-2">Aucune transaction</p>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -403,7 +421,7 @@
                     onClick={resetData}
                     className="w-full bg-orange-500 text-white p-4 rounded-2xl font-medium flex items-center justify-center space-x-2 hover:bg-orange-600 mb-4"
                   >
-                    <RotateCcw className="w-5 h-5" />
+                    <span>🔄</span>
                     <span>Remise à zéro complète</span>
                   </button>
                 )}
@@ -412,8 +430,8 @@
                 {showAddMoney && selectedChild && (
                   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
                     <div className="bg-white rounded-3xl p-6 w-full max-w-sm">
-                      <h3 className="text-xl font-bold mb-4">💰 Ajouter de l'argent</h3>
-                      <p className="text-gray-600 mb-4">Pour {selectedChild.name}</p>
+                      <h3 className="text-xl font-bold mb-4 text-center">💰 Ajouter de l'argent</h3>
+                      <p className="text-gray-600 mb-4 text-center">Pour {selectedChild.avatar} {selectedChild.name}</p>
                       
                       <input
                         type="number"
@@ -454,8 +472,8 @@
                 {showExpense && selectedChild && (
                   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
                     <div className="bg-white rounded-3xl p-6 w-full max-w-sm">
-                      <h3 className="text-xl font-bold mb-4">🛒 Enregistrer une dépense</h3>
-                      <p className="text-gray-600 mb-4">Pour {selectedChild.name}</p>
+                      <h3 className="text-xl font-bold mb-4 text-center">🛒 Enregistrer une dépense</h3>
+                      <p className="text-gray-600 mb-4 text-center">Pour {selectedChild.avatar} {selectedChild.name}</p>
                       
                       <input
                         type="number"
