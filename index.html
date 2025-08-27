@@ -48,6 +48,15 @@
           const [pendingUser, setPendingUser] = useState(null);
           const [password, setPassword] = useState('');
           const [passwordError, setPasswordError] = useState('');
+          const [showChangePassword, setShowChangePassword] = useState(false);
+          const [newPassword, setNewPassword] = useState('');
+          const [confirmPassword, setConfirmPassword] = useState('');
+          const [changePasswordError, setChangePasswordError] = useState('');
+
+          // Récupérer le mot de passe stocké ou utiliser le défaut
+          const [storedPassword, setStoredPassword] = useState(() => {
+            return localStorage.getItem('pocketMoney_password') || '1234';
+          });
 
           const users = [
             { id: 'papa', name: '👨 Papa', role: 'parent' },
@@ -103,7 +112,7 @@
           };
 
           const handlePasswordSubmit = () => {
-            if (password === '1234') {
+            if (password === storedPassword) {
               setCurrentUser(pendingUser);
               setShowPasswordModal(false);
               setPendingUser(null);
@@ -113,6 +122,25 @@
               setPasswordError('Mot de passe incorrect');
               setPassword('');
             }
+          };
+
+          const handleChangePassword = () => {
+            if (newPassword.length < 4) {
+              setChangePasswordError('Le mot de passe doit faire au moins 4 caractères');
+              return;
+            }
+            if (newPassword !== confirmPassword) {
+              setChangePasswordError('Les mots de passe ne correspondent pas');
+              return;
+            }
+            
+            setStoredPassword(newPassword);
+            localStorage.setItem('pocketMoney_password', newPassword);
+            setShowChangePassword(false);
+            setNewPassword('');
+            setConfirmPassword('');
+            setChangePasswordError('');
+            alert('✅ Mot de passe modifié avec succès !');
           };
 
           const addTransaction = (childId, amount, type, description) => {
@@ -126,7 +154,14 @@
               description,
               date: new Date().toLocaleDateString('fr-FR'),
               time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-              addedBy: currentUser.name
+              addedBy: currentUser.name,
+              timestamp: new Date().toLocaleString('fr-FR', { 
+                day: '2-digit', 
+                month: '2-digit', 
+                year: 'numeric',
+                hour: '2-digit', 
+                minute: '2-digit'
+              })
             };
 
             setTransactions(prev => [newTransaction, ...prev]);
@@ -158,8 +193,18 @@
             }
           };
 
-          const resetData = () => {
-            if (window.confirm('⚠️ Êtes-vous sûr de vouloir remettre à zéro tous les comptes et l\'historique ?')) {
+          const resetChildData = (childId) => {
+            const child = children.find(c => c.id === childId);
+            if (window.confirm(`⚠️ Êtes-vous sûr de vouloir remettre à zéro le compte de ${child.name} et son historique ?`)) {
+              setChildren(prev => prev.map(c => 
+                c.id === childId ? { ...c, balance: 0 } : c
+              ));
+              setTransactions(prev => prev.filter(t => t.childId !== childId));
+            }
+          };
+
+          const resetAllData = () => {
+            if (window.confirm('⚠️ Êtes-vous sûr de vouloir remettre à zéro TOUS les comptes et l\'historique ?')) {
               const resetChildren = children.map(child => ({ ...child, balance: 0 }));
               setChildren(resetChildren);
               setTransactions([]);
@@ -169,6 +214,67 @@
           const getChildTransactions = (childId) => {
             return transactions.filter(t => t.childId === childId);
           };
+
+          const getCurrentUserChild = () => {
+            if (currentUser.id === 'thomas') return children.find(c => c.name === 'Thomas');
+            if (currentUser.id === 'clement') return children.find(c => c.name === 'Clément');
+            return null;
+          };
+
+          // Modal de changement de mot de passe
+          if (showChangePassword) {
+            return (
+              <div className="min-h-screen bg-gradient-to-b from-blue-100 to-purple-100 p-4 flex items-center justify-center">
+                <div className="bg-white rounded-3xl shadow-lg p-8 w-full max-w-sm">
+                  <div className="text-center mb-6">
+                    <div className="text-4xl mb-4">🔑</div>
+                    <h2 className="text-xl font-bold text-gray-800 mb-2">Changer le mot de passe</h2>
+                    <p className="text-gray-600">Nouveau mot de passe parents</p>
+                  </div>
+
+                  <input
+                    type="password"
+                    placeholder="Nouveau mot de passe"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full p-3 border border-gray-300 rounded-2xl mb-4 text-lg"
+                  />
+
+                  <input
+                    type="password"
+                    placeholder="Confirmer le mot de passe"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="w-full p-3 border border-gray-300 rounded-2xl mb-4 text-lg"
+                  />
+
+                  {changePasswordError && (
+                    <p className="text-red-500 text-sm text-center mb-4">{changePasswordError}</p>
+                  )}
+
+                  <div className="flex space-x-3">
+                    <button
+                      onClick={() => {
+                        setShowChangePassword(false);
+                        setNewPassword('');
+                        setConfirmPassword('');
+                        setChangePasswordError('');
+                      }}
+                      className="flex-1 bg-gray-200 text-gray-800 p-3 rounded-2xl font-medium"
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      onClick={handleChangePassword}
+                      className="flex-1 bg-blue-500 text-white p-3 rounded-2xl font-medium"
+                    >
+                      Modifier
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          }
 
           // Modal de mot de passe
           if (showPasswordModal && pendingUser) {
@@ -252,8 +358,8 @@
                     <div className="mt-8 p-4 bg-blue-50 rounded-2xl">
                       <h3 className="font-bold text-blue-800 mb-2">📱 Comment utiliser l'app :</h3>
                       <div className="text-sm text-blue-700 space-y-1">
-                        <p><strong>Parents (🔒):</strong> Mot de passe requis - Ajoutez l'argent de poche, enregistrez les dépenses</p>
-                        <p><strong>Enfants :</strong> Accès libre - Consultez votre solde et historique</p>
+                        <p><strong>Parents (🔒):</strong> Mot de passe requis - Gérez l'argent de poche</p>
+                        <p><strong>Enfants :</strong> Accès libre - Consultez votre compte personnel</p>
                         <p><strong>💾 Données :</strong> Tout est sauvegardé automatiquement</p>
                       </div>
                     </div>
@@ -277,7 +383,12 @@
                         ← Retour
                       </button>
                       <h2 className="text-xl font-bold">{historyChild.avatar} {historyChild.name}</h2>
-                      <div className="w-16"></div>
+                      <button 
+                        onClick={() => setCurrentUser(null)}
+                        className="text-gray-500 text-sm"
+                      >
+                        🏠 Accueil
+                      </button>
                     </div>
 
                     <div className={`mb-6 p-4 bg-gradient-to-r ${historyChild.color} text-white rounded-2xl text-center`}>
@@ -285,6 +396,17 @@
                       <p className="text-2xl font-bold">{historyChild.balance.toFixed(2)} €</p>
                       <p className="text-xs opacity-75">{historyChild.age}</p>
                     </div>
+
+                    {/* Reset individuel pour les parents */}
+                    {currentUser.role === 'parent' && (
+                      <button
+                        onClick={() => resetChildData(historyChild.id)}
+                        className="w-full bg-orange-500 text-white p-3 rounded-2xl font-medium mb-4 flex items-center justify-center space-x-2"
+                      >
+                        <span>🔄</span>
+                        <span>Remettre à zéro ce compte</span>
+                      </button>
+                    )}
 
                     <h3 className="text-lg font-bold mb-4">📚 Historique des transactions</h3>
                     
@@ -298,7 +420,7 @@
                               <div className="flex-1">
                                 <p className="font-medium">{transaction.description}</p>
                                 <p className="text-sm text-gray-600">
-                                  {transaction.date} à {transaction.time}
+                                  📅 {transaction.timestamp}
                                 </p>
                                 <p className="text-xs text-gray-500">Saisi par {transaction.addedBy}</p>
                               </div>
@@ -318,6 +440,84 @@
             );
           }
 
+          // Vue enfant - ne voit que son propre compte
+          if (currentUser.role === 'child') {
+            const myAccount = getCurrentUserChild();
+            if (!myAccount) return <div>Erreur: Compte non trouvé</div>;
+
+            const myTransactions = getChildTransactions(myAccount.id);
+
+            return (
+              <div className="min-h-screen bg-gradient-to-b from-blue-100 to-purple-100 p-4">
+                <div className="max-w-md mx-auto">
+                  {/* Header enfant */}
+                  <div className="flex items-center justify-between mb-6 bg-white rounded-2xl p-4 shadow-md">
+                    <div>
+                      <p className="text-sm text-gray-600">Mon compte</p>
+                      <p className="font-bold text-lg flex items-center">
+                        {currentUser.name}
+                      </p>
+                    </div>
+                    <button 
+                      onClick={() => setCurrentUser(null)}
+                      className="bg-gray-100 p-2 rounded-full hover:bg-gray-200"
+                    >
+                      👤
+                    </button>
+                  </div>
+
+                  {/* Mon solde */}
+                  <div className="bg-white rounded-3xl shadow-lg p-6 mb-6">
+                    <div className="text-center mb-4">
+                      <h2 className="text-2xl font-bold flex items-center justify-center">
+                        <span className="text-4xl mr-3">{myAccount.avatar}</span>
+                        <div>
+                          <div>{myAccount.name}</div>
+                          <div className="text-sm text-gray-500 font-normal">{myAccount.age}</div>
+                        </div>
+                      </h2>
+                    </div>
+                    
+                    <div className={`bg-gradient-to-r ${myAccount.color} text-white rounded-2xl p-6 text-center`}>
+                      <p className="text-sm opacity-90">Mon argent de poche</p>
+                      <p className="text-4xl font-bold">{myAccount.balance.toFixed(2)} €</p>
+                    </div>
+                  </div>
+
+                  {/* Mon historique */}
+                  <div className="bg-white rounded-3xl shadow-lg p-6">
+                    <h3 className="text-lg font-bold mb-4">📚 Mes achats</h3>
+                    
+                    {myTransactions.length === 0 ? (
+                      <p className="text-gray-500 text-center py-8">Aucun achat pour le moment</p>
+                    ) : (
+                      <div className="space-y-3 max-h-96 overflow-y-auto">
+                        {myTransactions.map(transaction => (
+                          <div key={transaction.id} className="p-4 border rounded-2xl">
+                            <div className="flex justify-between items-start">
+                              <div className="flex-1">
+                                <p className="font-medium">{transaction.description}</p>
+                                <p className="text-sm text-gray-600">
+                                  📅 {transaction.timestamp}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <p className={`font-bold ${transaction.type === 'add' ? 'text-green-600' : 'text-red-600'}`}>
+                                  {transaction.type === 'add' ? '+' : '-'}{transaction.amount.toFixed(2)} €
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          // Vue parents - voient tout
           return (
             <div className="min-h-screen bg-gradient-to-b from-blue-100 to-purple-100 p-4">
               <div className="max-w-md mx-auto">
@@ -327,15 +527,24 @@
                     <p className="text-sm text-gray-600">Connecté en tant que</p>
                     <p className="font-bold text-lg flex items-center">
                       {currentUser.name}
-                      {currentUser.role === 'parent' && <span className="ml-2 text-blue-500">🔒</span>}
+                      <span className="ml-2 text-blue-500">🔒</span>
                     </p>
                   </div>
-                  <button 
-                    onClick={() => setCurrentUser(null)}
-                    className="bg-gray-100 p-2 rounded-full hover:bg-gray-200"
-                  >
-                    👤
-                  </button>
+                  <div className="flex space-x-2">
+                    <button 
+                      onClick={() => setShowChangePassword(true)}
+                      className="bg-blue-100 p-2 rounded-full hover:bg-blue-200" 
+                      title="Changer mot de passe"
+                    >
+                      🔑
+                    </button>
+                    <button 
+                      onClick={() => setCurrentUser(null)}
+                      className="bg-gray-100 p-2 rounded-full hover:bg-gray-200"
+                    >
+                      👤
+                    </button>
+                  </div>
                 </div>
 
                 {/* Badge de sauvegarde */}
@@ -372,30 +581,37 @@
                         <p className="text-3xl font-bold">{child.balance.toFixed(2)} €</p>
                       </div>
 
-                      {currentUser.role === 'parent' && (
-                        <div className="flex space-x-3">
-                          <button
-                            onClick={() => {
-                              setSelectedChild(child);
-                              setShowAddMoney(true);
-                            }}
-                            className="flex-1 bg-green-500 text-white p-3 rounded-2xl font-medium flex items-center justify-center space-x-2 hover:bg-green-600"
-                          >
-                            <span>➕</span>
-                            <span>Ajouter</span>
-                          </button>
-                          <button
-                            onClick={() => {
-                              setSelectedChild(child);
-                              setShowExpense(true);
-                            }}
-                            className="flex-1 bg-red-500 text-white p-3 rounded-2xl font-medium flex items-center justify-center space-x-2 hover:bg-red-600"
-                          >
-                            <span>➖</span>
-                            <span>Dépense</span>
-                          </button>
-                        </div>
-                      )}
+                      <div className="flex space-x-3 mb-3">
+                        <button
+                          onClick={() => {
+                            setSelectedChild(child);
+                            setShowAddMoney(true);
+                          }}
+                          className="flex-1 bg-green-500 text-white p-3 rounded-2xl font-medium flex items-center justify-center space-x-2 hover:bg-green-600"
+                        >
+                          <span>➕</span>
+                          <span>Ajouter</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSelectedChild(child);
+                            setShowExpense(true);
+                          }}
+                          className="flex-1 bg-red-500 text-white p-3 rounded-2xl font-medium flex items-center justify-center space-x-2 hover:bg-red-600"
+                        >
+                          <span>➖</span>
+                          <span>Dépense</span>
+                        </button>
+                      </div>
+
+                      {/* Reset individuel */}
+                      <button
+                        onClick={() => resetChildData(child.id)}
+                        className="w-full bg-orange-400 text-white p-2 rounded-xl text-sm font-medium flex items-center justify-center space-x-1 hover:bg-orange-500"
+                      >
+                        <span>🔄</span>
+                        <span>Reset {child.name}</span>
+                      </button>
 
                       {/* Recent transactions preview */}
                       <div className="mt-4">
@@ -415,16 +631,14 @@
                   ))}
                 </div>
 
-                {/* Reset button for parents */}
-                {currentUser.role === 'parent' && (
-                  <button
-                    onClick={resetData}
-                    className="w-full bg-orange-500 text-white p-4 rounded-2xl font-medium flex items-center justify-center space-x-2 hover:bg-orange-600 mb-4"
-                  >
-                    <span>🔄</span>
-                    <span>Remise à zéro complète</span>
-                  </button>
-                )}
+                {/* Reset général */}
+                <button
+                  onClick={resetAllData}
+                  className="w-full bg-red-600 text-white p-4 rounded-2xl font-medium flex items-center justify-center space-x-2 hover:bg-red-700 mb-4"
+                >
+                  <span>⚠️</span>
+                  <span>Remise à zéro GÉNÉRALE</span>
+                </button>
 
                 {/* Add Money Modal */}
                 {showAddMoney && selectedChild && (
