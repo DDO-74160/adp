@@ -9,7 +9,6 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
-    <script src="https://cdn.emailjs.com/dist/email.min.js"></script>
     <style>
         body { 
             margin: 0; 
@@ -31,10 +30,23 @@
         .sync-success { background: #10b981; }
         .sync-error { background: #ef4444; }
         .sync-syncing { background: #f59e0b; }
+        .debug-info {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 10px;
+            border-radius: 10px;
+            font-size: 10px;
+            max-width: 300px;
+            z-index: 1000;
+        }
     </style>
 </head>
 <body>
     <div id="sync-status" class="sync-indicator" style="display: none;"></div>
+    <div id="debug-info" class="debug-info" style="display: none;"></div>
     <div id="root">
         <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh;">
             <div style="text-align: center; padding: 2rem; background: white; border-radius: 1rem;">
@@ -54,57 +66,26 @@
             initialized: false
         };
 
-        // Configuration EmailJS pour notifications
-        const EMAIL_CONFIG = {
-            serviceId: 'service_password_notify',
-            templateId: 'template_password_change',
-            publicKey: null,
-            initialized: false
-        };
-
-        // Initialiser EmailJS
-        const initEmailJS = () => {
-            if (!EMAIL_CONFIG.publicKey) return false;
-            try {
-                emailjs.init(EMAIL_CONFIG.publicKey);
-                EMAIL_CONFIG.initialized = true;
-                return true;
-            } catch (e) {
-                console.error('Erreur initialisation EmailJS:', e);
-                return false;
-            }
-        };
-
-        // Envoyer notification changement de mot de passe
-        const sendPasswordChangeNotification = async (oldPassword, newPassword, changedBy) => {
-            if (!EMAIL_CONFIG.initialized) return false;
-
-            const templateParams = {
-                to_email: 'david.dimastro@gmail.com',
-                from_name: 'Application Argent de Poche',
-                changed_by: changedBy,
-                change_date: new Date().toLocaleString('fr-FR'),
-                old_password: oldPassword.length > 0 ? '●'.repeat(oldPassword.length) : 'N/A',
-                new_password: '●'.repeat(newPassword.length),
-                device_info: navigator.userAgent.includes('Mobile') ? 'Mobile' : 'Desktop'
-            };
-
-            try {
-                await emailjs.send(
-                    EMAIL_CONFIG.serviceId,
-                    EMAIL_CONFIG.templateId,
-                    templateParams
-                );
-                return true;
-            } catch (error) {
-                console.error('Erreur envoi email:', error);
-                return false;
+        // Debug info
+        let debugInfo = [];
+        const addDebug = (message) => {
+            debugInfo.push(`${new Date().toLocaleTimeString()}: ${message}`);
+            if (debugInfo.length > 10) debugInfo.shift();
+            const debugEl = document.getElementById('debug-info');
+            if (debugEl) {
+                debugEl.innerHTML = debugInfo.join('<br>');
+                debugEl.style.display = 'block';
             }
         };
 
         // Fonctions de chiffrement/déchiffrement
         const encryptData = (data, password) => {
-            return CryptoJS.AES.encrypt(JSON.stringify(data), password).toString();
+            try {
+                return CryptoJS.AES.encrypt(JSON.stringify(data), password).toString();
+            } catch (e) {
+                addDebug(`Erreur chiffrement: ${e.message}`);
+                return null;
+            }
         };
 
         const decryptData = (encryptedData, password) => {
@@ -113,18 +94,23 @@
                 const decrypted = bytes.toString(CryptoJS.enc.Utf8);
                 return JSON.parse(decrypted);
             } catch (e) {
-                console.error('Erreur déchiffrement:', e);
+                addDebug(`Erreur déchiffrement: ${e.message}`);
                 return null;
             }
         };
 
         // Fonctions de synchronisation GitHub
         const createGist = async (data, password) => {
-            if (!GITHUB_CONFIG.token) return null;
+            if (!GITHUB_CONFIG.token) {
+                addDebug('Token GitHub manquant');
+                return null;
+            }
             
             const encryptedData = encryptData(data, password);
+            if (!encryptedData) return null;
             
             try {
+                addDebug('Création du Gist...');
                 const response = await fetch('https://api.github.com/gists', {
                     method: 'POST',
                     headers: {
@@ -146,20 +132,29 @@
                     const gist = await response.json();
                     GITHUB_CONFIG.gistId = gist.id;
                     localStorage.setItem('github_gist_id', gist.id);
+                    addDebug(`Gist créé: ${gist.id}`);
                     return gist.id;
+                } else {
+                    const error = await response.text();
+                    addDebug(`Erreur création Gist: ${error}`);
                 }
             } catch (e) {
-                console.error('Erreur création Gist:', e);
+                addDebug(`Erreur réseau: ${e.message}`);
             }
             return null;
         };
 
         const updateGist = async (data, password) => {
-            if (!GITHUB_CONFIG.token || !GITHUB_CONFIG.gistId) return false;
+            if (!GITHUB_CONFIG.token || !GITHUB_CONFIG.gistId) {
+                addDebug('Token ou Gist ID manquant');
+                return false;
+            }
             
             const encryptedData = encryptData(data, password);
+            if (!encryptedData) return false;
             
             try {
+                addDebug(`Mise à jour Gist: ${GITHUB_CONFIG.gistId}`);
                 const response = await fetch(`https://api.github.com/gists/${GITHUB_CONFIG.gistId}`, {
                     method: 'PATCH',
                     headers: {
@@ -175,17 +170,27 @@
                     })
                 });
                 
-                return response.ok;
+                if (response.ok) {
+                    addDebug('Gist mis à jour avec succès');
+                    return true;
+                } else {
+                    const error = await response.text();
+                    addDebug(`Erreur MAJ Gist: ${error}`);
+                }
             } catch (e) {
-                console.error('Erreur mise à jour Gist:', e);
-                return false;
+                addDebug(`Erreur réseau MAJ: ${e.message}`);
             }
+            return false;
         };
 
         const loadFromGist = async (password) => {
-            if (!GITHUB_CONFIG.token || !GITHUB_CONFIG.gistId) return null;
+            if (!GITHUB_CONFIG.token || !GITHUB_CONFIG.gistId) {
+                addDebug('Impossible de charger: Token ou Gist ID manquant');
+                return null;
+            }
             
             try {
+                addDebug(`Chargement depuis Gist: ${GITHUB_CONFIG.gistId}`);
                 const response = await fetch(`https://api.github.com/gists/${GITHUB_CONFIG.gistId}`, {
                     headers: {
                         'Authorization': `token ${GITHUB_CONFIG.token}`,
@@ -195,10 +200,17 @@
                 if (response.ok) {
                     const gist = await response.json();
                     const encryptedContent = gist.files['pocket-money-data.json'].content;
-                    return decryptData(encryptedContent, password);
+                    const decrypted = decryptData(encryptedContent, password);
+                    if (decrypted) {
+                        addDebug('Données chargées avec succès');
+                        return decrypted;
+                    }
+                } else {
+                    const error = await response.text();
+                    addDebug(`Erreur chargement: ${error}`);
                 }
             } catch (e) {
-                console.error('Erreur chargement Gist:', e);
+                addDebug(`Erreur réseau chargement: ${e.message}`);
             }
             return null;
         };
@@ -229,8 +241,7 @@
           const [githubToken, setGithubToken] = useState('');
           const [syncStatus, setSyncStatus] = useState('idle');
           const [lastSyncTime, setLastSyncTime] = useState(null);
-          const [showEmailSetup, setShowEmailSetup] = useState(false);
-          const [emailJsKey, setEmailJsKey] = useState('');
+          const [showDebug, setShowDebug] = useState(false);
 
           const syncIntervalRef = useRef(null);
 
@@ -261,11 +272,15 @@
                     }, 3000);
                 }
             }
+            addDebug(`Sync: ${message}`);
           };
 
           // Sauvegarder dans GitHub
           const saveToGitHub = async () => {
-            if (!GITHUB_CONFIG.initialized || !GITHUB_CONFIG.token) return;
+            if (!GITHUB_CONFIG.initialized || !GITHUB_CONFIG.token) {
+                addDebug('Sync non initialisée');
+                return;
+            }
             
             showSyncStatus('syncing', '🔄 Synchronisation...');
             
@@ -273,7 +288,8 @@
                 children,
                 transactions,
                 password: storedPassword,
-                lastUpdate: new Date().toISOString()
+                lastUpdate: new Date().toISOString(),
+                device: navigator.userAgent.includes('Mobile') ? 'Mobile' : 'Desktop'
             };
 
             let success = false;
@@ -294,43 +310,36 @@
 
           // Charger depuis GitHub
           const loadFromGitHub = async () => {
-            if (!GITHUB_CONFIG.initialized || !GITHUB_CONFIG.token) return;
+            if (!GITHUB_CONFIG.initialized || !GITHUB_CONFIG.token) {
+                addDebug('Load: Sync non initialisée');
+                return;
+            }
             
             const data = await loadFromGist(storedPassword);
             if (data) {
-                setChildren(data.children || children);
-                setTransactions(data.transactions || []);
-                if (data.password) {
-                    setStoredPassword(data.password);
-                    localStorage.setItem('pocketMoney_password', data.password);
+                // Vérifier si les données sont plus récentes
+                const localUpdate = localStorage.getItem('last_local_update');
+                const remoteUpdate = data.lastUpdate;
+                
+                if (!localUpdate || new Date(remoteUpdate) > new Date(localUpdate)) {
+                    addDebug('Données distantes plus récentes, mise à jour locale');
+                    setChildren(data.children || children);
+                    setTransactions(data.transactions || []);
+                    if (data.password) {
+                        setStoredPassword(data.password);
+                        localStorage.setItem('pocketMoney_password', data.password);
+                    }
+                    localStorage.setItem('last_local_update', remoteUpdate);
+                    setLastSyncTime(new Date().toLocaleTimeString('fr-FR'));
+                    showSyncStatus('success', '✅ Données chargées');
+                } else {
+                    addDebug('Données locales à jour');
                 }
-                setLastSyncTime(new Date().toLocaleTimeString('fr-FR'));
-                showSyncStatus('success', '✅ Données chargées');
             }
           };
 
-          // Configuration EmailJS
-          const setupEmailNotifications = () => {
-            if (!emailJsKey || emailJsKey.length < 10) {
-              alert('❌ Clé EmailJS invalide. Doit être fournie par configuration.');
-              return;
-            }
-
-            EMAIL_CONFIG.publicKey = emailJsKey;
-            localStorage.setItem('emailjs_public_key', emailJsKey);
-            
-            const initialized = initEmailJS();
-            
-            setShowEmailSetup(false);
-            setEmailJsKey('');
-            
-            if (initialized) {
-              alert('✅ Notifications email activées !\n📧 Vous recevrez un email à chaque changement de mot de passe.');
-            } else {
-              alert('❌ Erreur lors de l\'activation des notifications email.');
-            }
-          };
-          const setupGitHubSync = () => {
+          // Configuration initiale GitHub
+          const setupGitHubSync = async () => {
             if (!githubToken.startsWith('ghp_')) {
                 alert('❌ Token GitHub invalide. Il doit commencer par "ghp_"');
                 return;
@@ -341,15 +350,25 @@
             GITHUB_CONFIG.initialized = true;
 
             localStorage.setItem('github_token', githubToken);
+            addDebug(`Token configuré: ${githubToken.substring(0, 8)}...`);
+            addDebug(`Gist ID: ${GITHUB_CONFIG.gistId || 'Aucun'}`);
             
             setShowSyncSetup(false);
             setGithubToken('');
             
+            // Tester la synchronisation
+            if (GITHUB_CONFIG.gistId) {
+                // Charger d'abord les données existantes
+                await loadFromGitHub();
+            } else {
+                // Créer le Gist avec les données actuelles
+                await saveToGitHub();
+            }
+            
             // Démarrer la synchronisation
             startSyncInterval();
-            loadFromGitHub();
             
-            alert('✅ Synchronisation GitHub activée !');
+            alert('✅ Synchronisation GitHub activée !\n\n🔧 Debug activé en bas à gauche pour diagnostic.');
           };
 
           // Démarrer la synchronisation périodique
@@ -358,6 +377,7 @@
                 clearInterval(syncIntervalRef.current);
             }
             
+            addDebug('Sync périodique démarrée (30s)');
             syncIntervalRef.current = setInterval(() => {
                 if (GITHUB_CONFIG.initialized) {
                     loadFromGitHub();
@@ -372,14 +392,15 @@
               const savedTransactions = localStorage.getItem('pocketMoney_transactions');
               const savedToken = localStorage.getItem('github_token');
               const savedGistId = localStorage.getItem('github_gist_id');
-              const savedEmailKey = localStorage.getItem('emailjs_public_key');
               
               if (savedChildren) {
                 setChildren(JSON.parse(savedChildren));
+                addDebug('Enfants chargés depuis localStorage');
               }
               
               if (savedTransactions) {
                 setTransactions(JSON.parse(savedTransactions));
+                addDebug('Transactions chargées depuis localStorage');
               }
 
               // Configuration GitHub si déjà configurée
@@ -387,17 +408,13 @@
                 GITHUB_CONFIG.token = savedToken;
                 GITHUB_CONFIG.gistId = savedGistId;
                 GITHUB_CONFIG.initialized = true;
+                addDebug(`Sync GitHub restaurée. Gist: ${savedGistId || 'Aucun'}`);
                 startSyncInterval();
-                loadFromGitHub();
-              }
-
-              // Configuration EmailJS si déjà configurée
-              if (savedEmailKey) {
-                EMAIL_CONFIG.publicKey = savedEmailKey;
-                initEmailJS();
+                // Charger immédiatement
+                setTimeout(() => loadFromGitHub(), 1000);
               }
             } catch (e) {
-              console.log('Premier chargement');
+              addDebug(`Erreur chargement initial: ${e.message}`);
             }
           }, []);
 
@@ -405,22 +422,26 @@
           useEffect(() => {
             try {
               localStorage.setItem('pocketMoney_children', JSON.stringify(children));
+              localStorage.setItem('last_local_update', new Date().toISOString());
               if (GITHUB_CONFIG.initialized) {
-                saveToGitHub();
+                // Décaler la sauvegarde GitHub
+                setTimeout(() => saveToGitHub(), 500);
               }
             } catch (e) {
-              console.error('Erreur sauvegarde enfants:', e);
+              addDebug(`Erreur sauvegarde enfants: ${e.message}`);
             }
           }, [children]);
 
           useEffect(() => {
             try {
               localStorage.setItem('pocketMoney_transactions', JSON.stringify(transactions));
+              localStorage.setItem('last_local_update', new Date().toISOString());
               if (GITHUB_CONFIG.initialized) {
-                saveToGitHub();
+                // Décaler la sauvegarde GitHub
+                setTimeout(() => saveToGitHub(), 500);
               }
             } catch (e) {
-              console.error('Erreur sauvegarde transactions:', e);
+              addDebug(`Erreur sauvegarde transactions: ${e.message}`);
             }
           }, [transactions]);
 
@@ -467,22 +488,6 @@
               return;
             }
             
-            const oldPassword = storedPassword;
-            
-            // Envoyer notification email
-            if (EMAIL_CONFIG.initialized) {
-                const emailSent = await sendPasswordChangeNotification(
-                    oldPassword, 
-                    newPassword, 
-                    currentUser.name
-                );
-                if (emailSent) {
-                    console.log('✅ Notification email envoyée');
-                } else {
-                    console.log('⚠️ Erreur envoi notification email');
-                }
-            }
-            
             setStoredPassword(newPassword);
             localStorage.setItem('pocketMoney_password', newPassword);
             setShowChangePassword(false);
@@ -494,8 +499,7 @@
               await saveToGitHub();
             }
             
-            alert('✅ Mot de passe modifié avec succès !' + 
-                  (EMAIL_CONFIG.initialized ? '\n📧 Notification envoyée par email.' : ''));
+            alert('✅ Mot de passe modifié avec succès !');
           };
 
           const addTransaction = (childId, amount, type, description) => {
@@ -576,52 +580,7 @@
             return null;
           };
 
-          // Modal de configuration EmailJS
-          if (showEmailSetup) {
-            return (
-              <div className="min-h-screen bg-gradient-to-b from-blue-100 to-purple-100 p-4 flex items-center justify-center">
-                <div className="bg-white rounded-3xl shadow-lg p-8 w-full max-w-sm">
-                  <div className="text-center mb-6">
-                    <div className="text-4xl mb-4">📧</div>
-                    <h2 className="text-xl font-bold text-gray-800 mb-2">Notifications Email</h2>
-                    <p className="text-gray-600 text-sm">Changements de mot de passe → david.dimastro@gmail.com</p>
-                  </div>
-
-                  <div className="mb-4 p-3 bg-blue-50 rounded-2xl text-sm text-blue-700">
-                    <p className="font-bold mb-2">🔧 Configuration automatique :</p>
-                    <p>Les notifications email sont préconfigurées pour envoyer un email à david.dimastro@gmail.com à chaque changement de mot de passe.</p>
-                  </div>
-
-                  <input
-                    type="password"
-                    placeholder="Clé EmailJS (fournie par admin)"
-                    value={emailJsKey}
-                    onChange={(e) => setEmailJsKey(e.target.value)}
-                    className="w-full p-3 border border-gray-300 rounded-2xl mb-4 text-sm"
-                  />
-
-                  <div className="flex space-x-3">
-                    <button
-                      onClick={() => setShowEmailSetup(false)}
-                      className="flex-1 bg-gray-200 text-gray-800 p-3 rounded-2xl font-medium"
-                    >
-                      Plus tard
-                    </button>
-                    <button
-                      onClick={setupEmailNotifications}
-                      className="flex-1 bg-green-500 text-white p-3 rounded-2xl font-medium"
-                    >
-                      Activer
-                    </button>
-                  </div>
-
-                  <div className="mt-4 p-3 bg-green-50 rounded-2xl text-xs text-green-700 text-center">
-                    <p>🔐 Email automatique à chaque changement de mot de passe</p>
-                  </div>
-                </div>
-              </div>
-            );
-          }
+          // Modal de configuration GitHub
           if (showSyncSetup) {
             return (
               <div className="min-h-screen bg-gradient-to-b from-blue-100 to-purple-100 p-4 flex items-center justify-center">
@@ -638,6 +597,7 @@
                     <p>2. "Generate new token (classic)"</p>
                     <p>3. Cochez "gist"</p>
                     <p>4. Copiez le token ici</p>
+                    <p className="mt-2 font-bold">⚠️ MÊME TOKEN sur tous les téléphones !</p>
                   </div>
 
                   <input
@@ -818,25 +778,15 @@
                           <span>Activer la synchronisation</span>
                         </button>
                       )}
-                      
-                      {!EMAIL_CONFIG.initialized && (
-                        <button
-                          onClick={() => setShowEmailSetup(true)}
-                          className="w-full bg-blue-500 text-white p-3 rounded-2xl font-medium flex items-center justify-center space-x-2"
-                        >
-                          <span>📧</span>
-                          <span>Activer les notifications email</span>
-                        </button>
-                      )}
                     </div>
 
                     <div className="mt-8 p-4 bg-blue-50 rounded-2xl">
-                      <h3 className="font-bold text-blue-800 mb-2">🚀 Fonctionnalités avancées :</h3>
+                      <h3 className="font-bold text-blue-800 mb-2">🔗 Synchronisation GitHub :</h3>
                       <div className="text-sm text-blue-700 space-y-1">
-                        <p><strong>🔗 Synchronisation GitHub :</strong> Partagé entre tous vos téléphones</p>
-                        <p><strong>📧 Notifications Email :</strong> Changements de mot de passe → david.dimastro@gmail.com</p>
                         <p><strong>🔒 Sécurisé :</strong> Données chiffrées avec votre mot de passe</p>
                         <p><strong>🔄 Automatique :</strong> Sync toutes les 30 secondes</p>
+                        <p><strong>📱 Multi-appareils :</strong> Même token sur tous les téléphones</p>
+                        <p><strong>🐛 Debug :</strong> Infos de diagnostic en bas à gauche</p>
                       </div>
                     </div>
                   </div>
@@ -1023,21 +973,19 @@
                         🔗
                       </button>
                     )}
-                    {!EMAIL_CONFIG.initialized && (
-                      <button 
-                        onClick={() => setShowEmailSetup(true)}
-                        className="bg-blue-100 p-2 rounded-full hover:bg-blue-200" 
-                        title="Activer notifications email"
-                      >
-                        📧
-                      </button>
-                    )}
                     <button 
                       onClick={() => setShowChangePassword(true)}
                       className="bg-yellow-100 p-2 rounded-full hover:bg-yellow-200" 
                       title="Changer mot de passe"
                     >
                       🔑
+                    </button>
+                    <button 
+                      onClick={() => setShowDebug(!showDebug)}
+                      className="bg-purple-100 p-2 rounded-full hover:bg-purple-200" 
+                      title="Toggle debug"
+                    >
+                      🐛
                     </button>
                     <button 
                       onClick={() => setCurrentUser(null)}
@@ -1048,19 +996,16 @@
                   </div>
                 </div>
 
-                {/* Badge de synchronisation et notifications */}
-                <div className="space-y-2 mb-4">
-                  <div className={`${GITHUB_CONFIG.initialized ? 'bg-green-100 border-green-300' : 'bg-yellow-100 border-yellow-300'} border rounded-2xl p-3 text-center`}>
-                    <p className={`text-sm ${GITHUB_CONFIG.initialized ? 'text-green-700' : 'text-yellow-700'}`}>
-                      {GITHUB_CONFIG.initialized ? '🔗 Synchronisation GitHub activée' : '⚠️ Synchronisation GitHub désactivée'}
+                {/* Badge de synchronisation */}
+                <div className={`${GITHUB_CONFIG.initialized ? 'bg-green-100 border-green-300' : 'bg-yellow-100 border-yellow-300'} border rounded-2xl p-3 mb-4 text-center`}>
+                  <p className={`text-sm ${GITHUB_CONFIG.initialized ? 'text-green-700' : 'text-yellow-700'}`}>
+                    {GITHUB_CONFIG.initialized ? '🔗 Synchronisation GitHub activée' : '⚠️ Synchronisation GitHub désactivée'}
+                  </p>
+                  {GITHUB_CONFIG.initialized && (
+                    <p className="text-xs text-gray-600 mt-1">
+                      Gist: {GITHUB_CONFIG.gistId ? GITHUB_CONFIG.gistId.substring(0, 8) + '...' : 'Aucun'}
                     </p>
-                  </div>
-                  
-                  <div className={`${EMAIL_CONFIG.initialized ? 'bg-blue-100 border-blue-300' : 'bg-gray-100 border-gray-300'} border rounded-2xl p-3 text-center`}>
-                    <p className={`text-sm ${EMAIL_CONFIG.initialized ? 'text-blue-700' : 'text-gray-600'}`}>
-                      {EMAIL_CONFIG.initialized ? '📧 Notifications email activées' : '📧 Notifications email désactivées'}
-                    </p>
-                  </div>
+                  )}
                 </div>
 
                 {/* Comptes des enfants */}
