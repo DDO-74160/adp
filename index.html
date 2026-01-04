@@ -109,6 +109,49 @@
         };
 
         // Fonctions de synchronisation GitHub
+
+        // NOUVEAU: Chercher un Gist existant
+        const findExistingGist = async () => {
+            if (!GITHUB_CONFIG.token) {
+                console.error('Token GitHub manquant');
+                return null;
+            }
+
+            try {
+                console.log('🔍 Recherche d\'un Gist existant...');
+                const response = await fetch('https://api.github.com/gists', {
+                    headers: {
+                        'Authorization': `token ${GITHUB_CONFIG.token}`,
+                    }
+                });
+
+                if (response.ok) {
+                    const gists = await response.json();
+                    // Chercher un Gist avec notre description spécifique
+                    const ourGist = gists.find(g =>
+                        g.description === 'Argent de poche - Données familiales (chiffrées)' &&
+                        g.files['pocket-money-data.encrypted']
+                    );
+
+                    if (ourGist) {
+                        console.log('✅ Gist existant trouvé:', ourGist.id);
+                        GITHUB_CONFIG.gistId = ourGist.id;
+                        localStorage.setItem('github_gist_id', ourGist.id);
+                        return ourGist.id;
+                    } else {
+                        console.log('ℹ️ Aucun Gist existant trouvé');
+                        return null;
+                    }
+                } else {
+                    console.error('❌ Erreur recherche Gists:', response.status);
+                    return null;
+                }
+            } catch (e) {
+                console.error('❌ Erreur réseau recherche:', e);
+                return null;
+            }
+        };
+
         const createGist = async (data, password) => {
             if (!GITHUB_CONFIG.token) {
                 console.error('Token GitHub manquant');
@@ -383,26 +426,38 @@
             }
 
             GITHUB_CONFIG.token = githubToken;
-            GITHUB_CONFIG.gistId = localStorage.getItem('github_gist_id');
             GITHUB_CONFIG.initialized = true;
-
             localStorage.setItem('github_token', githubToken);
             console.log('🔑 Token configuré');
 
             setShowSyncSetup(false);
             setGithubToken('');
 
-            // Tester la synchronisation
-            if (GITHUB_CONFIG.gistId) {
+            // CORRECTION: Chercher d'abord un Gist existant
+            console.log('🔍 Recherche d\'un Gist partagé...');
+            const existingGistId = await findExistingGist();
+
+            if (existingGistId) {
+                // Gist trouvé, charger les données
+                console.log('📥 Chargement des données partagées...');
                 await loadFromGitHub();
+                alert('✅ Synchronisation activée !\n\n🔗 Connecté au Gist partagé\n📥 Données chargées');
             } else {
-                await saveToGitHub();
+                // Pas de Gist trouvé, vérifier le localStorage
+                const savedGistId = localStorage.getItem('github_gist_id');
+                if (savedGistId) {
+                    GITHUB_CONFIG.gistId = savedGistId;
+                    await loadFromGitHub();
+                } else {
+                    // Créer un nouveau Gist
+                    console.log('📤 Création d\'un nouveau Gist...');
+                    await saveToGitHub();
+                    alert('✅ Synchronisation activée !\n\n🆕 Nouveau Gist créé\n💡 Utilisez le même token sur les autres appareils');
+                }
             }
 
             // Démarrer la synchronisation
             startSyncInterval();
-
-            alert('✅ Synchronisation GitHub activée !\n\n🔒 Données chiffrées avec AES-256\n🔄 Sync automatique toutes les 60 secondes');
           };
 
           // Démarrer la synchronisation périodique
